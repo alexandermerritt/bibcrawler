@@ -10,7 +10,10 @@ import os.path
 
 siteurl = 'dblp.uni-trier.de'
 confbase = '/db/conf/'
-confname = 'eurosys'
+confnames = [ 'eurosys', 'osdi', 'sosp', 'vldb', 'gpgpu',
+              'nsdi', 'usenix', 'sc', 'isca', 'socc',
+              'hpca', 'ccgrid', 'xsede',
+            ]
 
 url_re = re.compile('http://[a-zA-Z0-9./~\-]+')
 
@@ -31,6 +34,7 @@ def stripURL(url):
     url = url[ url.find('/') : ]
     return url
 
+# HTTP GET and return page body
 def fetch(siteurl, loc):
     ret = None
 
@@ -42,63 +46,77 @@ def fetch(siteurl, loc):
     stat = resp.status
 
     if stat == 200:
-        status('OK')
+        status('got OK')
         ret = resp.read()
     elif stat == 301 or stat == 302:
-        status('REDIRECT')
+        status('got REDIRECT')
         loc = resp.getheader('location')
         # assumption: redirect within same site
         ret = fetch(siteurl, stripURL(loc))
     else:
-        error(str(resp.status), str(resp.reason))
+        error('got', str(resp.status), str(resp.reason),
+                'for', siteurl, loc)
         if stat == 403:
             error(resp.read())
 
     conn.close()
     return ret
 
-# list of all conf instances
-page = fetch(siteurl, confbase + confname)
-if not page:
-    error('fetching root page')
-    sys.exit(1)
-
-urls = url_re.findall(page)
-if len(urls) == 0:
-    error('conf url has no embedded urls')
-    sys.exit(1)
-
-allConfURLs = set()
-for url in url_re.findall(page):
-    sub = confbase + confname
-    if sub in url:
-        allConfURLs.add(stripURL(url))
-
-for confURL in allConfURLs:
+def processConf(confURL):
     root = ET.fromstring('<?xml version="1.0"?><dblp></dblp>')
     filename = os.path.basename(confURL).split('.')[0] + '.xml'
+
+    # no updates exist once proceedings have been fetched already
     if os.path.exists(filename):
-        continue
+        status('Skipping', confURL)
+        return
+    status('Fetching', confURL)
 
     page = fetch(siteurl, confURL)
     if not page:
-        error('fetching conf url')
+        error('fetching conf at', confURL)
         sys.exit(1)
+
     bibURLs = set()
     for url in url_re.findall(page):
         if '/rec/bibtex/conf/' not in url:
             continue
-        if confname not in url:
-            continue
         if not url.endswith('.xml'):
             continue
         bibURLs.add(stripURL(url))
+
     for bibURL in bibURLs:
         bibXML = fetch(siteurl, bibURL)
         tree = ET.fromstring(bibXML)
-        for child in tree:
+        for child in tree: # top-level is <dblp></dblp>
             root.append(child)
 
     tree = ET.ElementTree(root)
     tree.write(filename)
+    status('wrote bib xmls of', confURL, 'to', filename)
+
+def processAll():
+    for confname in confnames:
+        status('Processing', confname)
+        page = fetch(siteurl, confbase + confname)
+        if not page:
+            error('fetch root page for', confname)
+            sys.exit(1)
+
+        urls = url_re.findall(page)
+        if len(urls) == 0:
+            error('no urls found in listing for', confname)
+            sys.exit(1)
+
+        sub = confbase + confname
+        confURLs = set()
+        for url in urls:
+            if sub in url:
+                confURLs.add( stripURL(url) )
+        
+        for url in confURLs:
+            processConf(url)
+
+# --------- 8< -----------
+processAll()
 
