@@ -14,7 +14,6 @@ confnames = [ 'eurosys', 'osdi', 'sosp', 'vldb', 'gpgpu',
               'nsdi', 'usenix', 'sc', 'isca', 'socc',
               'hpca', 'ccgrid', 'xsede',
             ]
-confnames = ['asplos'] # XXX
 
 url_re = re.compile('http://[a-zA-Z0-9./~\-]+')
 
