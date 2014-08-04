@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-# -*- coding: utf-8 -*-
+# -*- encoding: utf-8 -*-
 # author: Alexander Merritt, merritt.alex@gatech.edu
 # fetches ACM bibtex entries for a conference, workshop, or journal
 import re
@@ -7,6 +7,7 @@ import httplib
 import sys
 import xml.etree.ElementTree as ET
 import os.path
+import time
 
 siteurl = 'dblp.uni-trier.de'
 confbase = '/db/conf/'
@@ -58,6 +59,8 @@ def fetch(siteurl, loc):
                 'for', siteurl, loc)
         if stat == 403:
             error(resp.read())
+
+    time.sleep(1)
 
     conn.close()
     return ret
@@ -112,7 +115,7 @@ def processConf(confURL):
 def processAll():
     for confname in confnames:
         status('Processing', confname)
-        page = fetch(siteurl, confbase + confname)
+        page = fetch(siteurl, confbase + confname + '/')
         if not page:
             error('fetch root page for', confname)
             sys.exit(1)
