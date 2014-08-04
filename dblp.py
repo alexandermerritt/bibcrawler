@@ -1,4 +1,4 @@
-#! /usr/bin/env python2.7
+#! /usr/bin/env python
 # -*- coding: utf-8 -*-
 # author: Alexander Merritt, merritt.alex@gatech.edu
 # fetches ACM bibtex entries for a conference, workshop, or journal
@@ -14,6 +14,7 @@ confnames = [ 'eurosys', 'osdi', 'sosp', 'vldb', 'gpgpu',
               'nsdi', 'usenix', 'sc', 'isca', 'socc',
               'hpca', 'ccgrid', 'xsede',
             ]
+confnames = ['asplos'] # XXX
 
 url_re = re.compile('http://[a-zA-Z0-9./~\-]+')
 
@@ -41,7 +42,7 @@ def fetch(siteurl, loc):
     status('GET', siteurl, loc)
 
     conn = httplib.HTTPConnection(siteurl)
-    conn.request('GET', loc)
+    conn.request(method='GET', url=loc)
     resp = conn.getresponse()
     stat = resp.status
 
@@ -62,15 +63,30 @@ def fetch(siteurl, loc):
     conn.close()
     return ret
 
+def extract_pre(html):
+    pre = html
+
+    start = pre.find('<pre>') + 5
+    end = pre.find('</pre>')
+    pre = pre[ start : end ]
+
+    # dblp inserts some stupid href in the citation name
+    start = pre.find('<a')
+    end = pre.find('a>:') + 3
+    pre = pre[ : start ] + pre[ end : ]
+
+    return pre
+
 def processConf(confURL):
-    root = ET.fromstring('<?xml version="1.0"?><dblp></dblp>')
-    filename = os.path.basename(confURL).split('.')[0] + '.xml'
+    #root = ET.fromstring('<?xml version="1.0"?><dblp></dblp>')
+    filename = os.path.basename(confURL).split('.')[0] + '.bib'
 
     # no updates exist once proceedings have been fetched already
     if os.path.exists(filename):
         status('Skipping', confURL)
         return
     status('Fetching', confURL)
+    out = ''
 
     page = fetch(siteurl, confURL)
     if not page:
@@ -81,19 +97,18 @@ def processConf(confURL):
     for url in url_re.findall(page):
         if '/rec/bibtex/conf/' not in url:
             continue
-        if not url.endswith('.xml'):
+        if url.endswith('.xml'):
             continue
         bibURLs.add(stripURL(url))
 
     for bibURL in bibURLs:
-        bibXML = fetch(siteurl, bibURL)
-        tree = ET.fromstring(bibXML)
-        for child in tree: # top-level is <dblp></dblp>
-            root.append(child)
+        html = fetch(siteurl, bibURL)
+        out += extract_pre(html) + '\n'
 
-    tree = ET.ElementTree(root)
-    tree.write(filename)
-    status('wrote bib xmls of', confURL, 'to', filename)
+    f = open(filename, 'w')
+    f.write(out)
+    f.close()
+    status('wrote bibtex of', confURL, 'to', filename)
 
 def processAll():
     for confname in confnames:
